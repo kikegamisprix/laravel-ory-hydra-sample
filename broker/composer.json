@@ -1,0 +1,8 @@
+{
+  "name": "sample/broker",
+  "description": "OIDC 非対応のレガシーアプリ向け認証ブローカー（PHP 8）",
+  "require": {
+    "php": "^8.3",
+    "jumbojett/openid-connect-php": "^1.0"
+  }
+}

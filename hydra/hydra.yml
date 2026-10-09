@@ -1,0 +1,29 @@
+# 秘密値（DSN、SECRETS_SYSTEM、pairwise salt）は compose の環境変数で渡す
+serve:
+  cookies:
+    same_site_mode: Lax
+
+urls:
+  self:
+    issuer: http://localhost:4444
+  login: http://localhost:8081/login
+  consent: http://localhost:8081/consent
+
+oidc:
+  subject_identifiers:
+    supported_types:
+      - public
+
+ttl:
+  id_token: 1h
+  access_token: 1h
+  refresh_token: 720h
+  login_consent_request: 30m
+
+oauth2:
+  pkce:
+    enforced: true
+
+log:
+  level: info
+  leak_sensitive_values: false
