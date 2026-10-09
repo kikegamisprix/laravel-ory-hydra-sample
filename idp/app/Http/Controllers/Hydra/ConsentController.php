@@ -11,8 +11,9 @@ use Illuminate\View\View;
 
 /**
  * Hydra の同意プロバイダ。
- * クライアントに skip_consent が付いていれば consent request の skip が true で来るので、
- * 画面を出さずに受理する。ID トークンに入れる claim もここで決める。
+ * クライアントに skip_consent が付いていれば consent request の client.skip_consent が true で来る
+ * （skip 自体は、同じ同意を以前に記憶させた場合に true）。どちらかなら画面を出さずに受理する。
+ * ID トークンに入れる claim もここで決める。
  */
 class ConsentController extends Controller
 {
@@ -46,8 +47,10 @@ class ConsentController extends Controller
             'scopes.*' => ['string'],
         ]);
         $consentRequest = $this->hydra->getConsentRequest($data['consent_challenge']);
+        // フォームの値は要求されたスコープの範囲に絞る
+        $grantScope = array_values(array_intersect($data['scopes'] ?? [], $consentRequest['requested_scope'] ?? []));
 
-        return redirect()->away($this->accept($data['consent_challenge'], $consentRequest, $data['scopes'] ?? []));
+        return redirect()->away($this->accept($data['consent_challenge'], $consentRequest, $grantScope));
     }
 
     private function accept(string $challenge, array $consentRequest, array $grantScope): string

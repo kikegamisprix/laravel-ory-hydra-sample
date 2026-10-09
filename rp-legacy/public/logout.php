@@ -1,5 +1,4 @@
 <?php
-session_name('rp_legacy_session');
-session_start();
+require __DIR__ . '/../session.php';
 session_destroy();
 header('Location: /');

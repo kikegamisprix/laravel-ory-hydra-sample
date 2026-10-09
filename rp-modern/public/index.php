@@ -10,7 +10,7 @@ $user = $_SESSION['user'] ?? null;
 <?php if ($user): ?>
   <p>ログイン中: <?= htmlspecialchars($user['email'] ?? '', ENT_QUOTES) ?></p>
   <pre><?= htmlspecialchars(json_encode($user, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?></pre>
-  <p><a href="logout.php">ログアウト（このアプリのセッションのみ）</a> / <a href="login.php?reauth=1">再認証（prompt=login）</a></p>
+  <p><a href="logout.php">ログアウト（このアプリのセッションのみ）</a> / <a href="login.php?reauth=1">再認証（prompt=login）</a> / <a href="login.php?max_age=10">再認証（max_age=10）</a></p>
 <?php else: ?>
   <p>未ログイン</p>
   <p><a href="login.php">Hydra 経由でログイン</a></p>

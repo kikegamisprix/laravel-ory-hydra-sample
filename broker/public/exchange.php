@@ -11,7 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 $app = appById((string) ($_POST['app_id'] ?? ''));
-if ($app === null || !hash_equals((string) $app['secret'], (string) ($_POST['secret'] ?? ''))) {
+if ($app === null || (string) ($app['secret'] ?? '') === '' || !hash_equals((string) $app['secret'], (string) ($_POST['secret'] ?? ''))) {
     http_response_code(401);
     echo json_encode(['error' => 'unauthorized']);
     exit;

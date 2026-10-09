@@ -29,6 +29,7 @@ function startSession(): void
     // 同じ localhost 上で複数の PHP アプリが動くので Cookie 名を分ける
     session_name('broker_session');
     if (session_status() !== PHP_SESSION_ACTIVE) {
+        ini_set('session.use_strict_mode', '1');   // 未知のセッション ID を受け付けない（セッション固定対策）
         session_start();
     }
 }
