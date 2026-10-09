@@ -21,6 +21,7 @@ curl_setopt_array($ch, array(
         'app_id' => getenv('BROKER_APP_ID'),
         'secret' => getenv('BROKER_EXCHANGE_SECRET'),
         'code' => $code,
+        'state' => $expected,   // URL の値ではなくセッションの値を送る
     )),
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_TIMEOUT => 5,

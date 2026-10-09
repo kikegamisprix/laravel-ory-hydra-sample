@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Hydra に rp-modern と broker の OAuth2 クライアントを登録し、各 .env に書き込む
 # 前提: docker compose up -d 済みで hydra が起動していること
+# 注意: --secret をコマンドライン引数で渡すため、実行中はプロセス一覧から見える（ローカル用途の前提）
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

@@ -41,8 +41,9 @@ class LoginController extends Controller
             ]));
         }
 
-        // ポータル自身のセッションでログイン済みなら、それをそのまま使う（SSO の要）
-        if (Auth::check() && Auth::user()->isActive()) {
+        // ポータル自身のセッションでログイン済みなら、それをそのまま使う（SSO の要）。
+        // ただし RP が prompt=login や max_age で再認証を求めている場合は素通りさせない
+        if (Auth::check() && Auth::user()->isActive() && ! $this->reauthRequired($loginRequest, $request)) {
             return redirect()->away($this->accept($challenge, Auth::id()));
         }
 
@@ -68,8 +69,25 @@ class LoginController extends Controller
             return $this->failed($request, 'このアカウントは無効です');
         }
         $request->session()->regenerate();
+        $request->session()->put('auth_time', time());
 
         return redirect()->away($this->accept($data['login_challenge'], Auth::id()));
+    }
+
+    /** 認可要求の prompt=login / max_age を見て、パスワード入力をやり直すべきか判定する */
+    private function reauthRequired(array $loginRequest, Request $request): bool
+    {
+        $query = [];
+        parse_str((string) parse_url($loginRequest['request_url'] ?? '', PHP_URL_QUERY), $query);
+
+        if (in_array('login', explode(' ', (string) ($query['prompt'] ?? '')), true)) {
+            return true;
+        }
+        if (isset($query['max_age'])) {
+            $authTime = (int) $request->session()->get('auth_time', 0);
+            return $authTime === 0 || time() - $authTime > (int) $query['max_age'];
+        }
+        return false;
     }
 
     private function failed(Request $request, string $message): RedirectResponse

@@ -9,7 +9,6 @@ if [ ! -f .env ]; then
   cat > .env <<ENV
 POSTGRES_PASSWORD=$(rand 16)
 HYDRA_SECRETS_SYSTEM=$(rand 32)
-HYDRA_PAIRWISE_SALT=$(rand 16)
 BROKER_EXCHANGE_SECRET=$(rand 32)
 DEMO_USER_EMAIL=demo@example.com
 DEMO_USER_PASSWORD=$(rand 8)
