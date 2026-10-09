@@ -99,7 +99,7 @@ docker compose exec idp php artisan user:disable demo@example.com --enable
 - Admin API（4445）はローカル確認のため 127.0.0.1 に開けているが、本番では公開しない
 - クライアント側から始めるログアウト（RP-Initiated Logout）と Token Introspection はこのサンプルには含めていない
 - Hydra の認可コードはブローカーと rp-modern のコールバック URL に載り、アクセスログに残る。攻撃者が始めた認可要求を被害者に完了させ、ログから拾った認可コードを攻撃者が自分のセッションで使う攻撃は、PKCE では防げない（challenge が攻撃者のもの）。サンプルでは `ttl.auth_code` を 1 分にし、`Referrer-Policy: no-referrer` を付けている。本番ではリバースプロキシのログ形式でクエリを落とす
-- ブローカーからレガシーアプリへの POST は、両者が別サイト（登録可能ドメインが違う）だとクロスサイトになり、SameSite 属性の付かない PHP 5.6 のセッション Cookie はブラウザが送らない。ブローカーとレガシーアプリは同一サイトに置く
+- ブローカーからレガシーアプリへの POST は、両者が別サイト（登録可能ドメインが違う）だとクロスサイトになり、SameSite 属性の付かない PHP 5.6 のセッション Cookie は、省略時を Lax 扱いするブラウザ（Chrome 系）では送られない。成否がブラウザに依存するので、ブローカーとレガシーアプリは同一サイトに置く
 - ブローカーのコールバックは自動送信のフォームと「続行」ボタンを両方出す。CSP でインラインスクリプトを止めている環境ではボタンで進む。rp-legacy からブラウザの「戻る」でブローカーのコールバックに戻ると 400 になる
 - `exchange.php` はサンプルではブラウザからも到達できる。本番では内部向けを別のポートかバーチャルホストに分けるか、リバースプロキシでパス単位に遮断する
 
@@ -109,7 +109,7 @@ docker compose exec idp php artisan user:disable demo@example.com --enable
 |---|---|
 | Ory Hydra | v26.2.0 |
 | Laravel | 12.x（PHP 8.3 イメージ、composer の platform は 8.2） |
-| jumbojett/openid-connect-php | 1.0.x |
+| jumbojett/openid-connect-php | 1.0.2 |
 | PHP（rp-legacy） | 5.6.40 |
 | PostgreSQL | 16 |
 
