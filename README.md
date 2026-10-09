@@ -72,13 +72,13 @@ docker compose down -v   # DB と vendor のボリュームも消す
 ## 無効化とログアウト
 
 - ポータルからログアウトすると、Hydra のログインセッションも失効させる（`SessionController::logout`）。これを呼ばないと `remember_for` の間は他のアプリから再ログインなしで通る
-- Hydra のログインセッションが残っている場合（`skip` が true）でも、台帳で無効化されたユーザーは reject する。Laravel 側が別のユーザーでログインしていれば、残っていた Hydra セッションを失効させて reject する（`LoginController::show`）
+- Hydra のログインセッションが残っている場合（`skip` が true）でも、台帳で無効化されたユーザーは reject する。Laravel 側が別のユーザーでログインしていれば、残っていた Hydra セッションを失効させて reject する（`LoginController::show`）。失効は subject 単位なので、前のユーザーが他の端末に持つ Hydra セッションも切れる
 - 再利用経路は Laravel セッションの `auth_time`（パスワード認証時に `submit` が入れる）を前提にする。既存のログイン処理に組み込むときは、そちらにも `auth_time` を入れる 1 行が要る。無ければ再利用経路は通らない
 - SSO のセッションは Laravel 側のもの。Hydra のログインセッション（`remember`）は実際にパスワードを入力したときだけ作る。Laravel セッションの再利用で Hydra に「今認証した」セッションを作ると、`max_age` の再認証要求が Hydra の skip 経由ですり抜けるため
 - `prompt=login` と `max_age` 超過は Hydra 自身が処理する（セッションを使わず skip を立てない）。accept した subject が Hydra セッションの subject と違う場合も Hydra が `prompt=login` を付けて戻す。Laravel 側で見るのは Laravel セッションを再利用する経路で、`prompt=login` / `max_age`（`request_url` のクエリ。Request Object や PAR は見ていない）と、最後のパスワード入力からの絶対上限（`config/hydra.php` の `max_sso_age`、8 時間）を確認する。rp-modern の「再認証」リンクで確認できる
 - 再利用経路で受理した場合、Hydra から見た認証時刻は受理した時刻になる（accept login に認証時刻を渡す項目はない）。RP が「最近認証したか」を判断するときは `auth_time` を自分で見ず、`max_age` か `prompt=login` を使う
 - 再利用経路は remember を付けないため、`prompt=none`（サイレント認証）は Hydra のログインセッション（`remember_for`）が切れると失敗する。`prompt=none` を使う RP があるなら Hydra のセッション寿命が SSO の上限になる
-- ユーザーの無効化は `php artisan user:disable <email>`。台帳の `disabled_at` を立て、Hydra のログインセッションと発行済みトークンを失効させる。`--enable` で解除
+- ユーザーの無効化は `php artisan user:disable <email>`。台帳の `disabled_at` を立て、Hydra のログインセッション・同意セッション・発行済みトークンを失効させる。`--enable` で解除
 
 ```sh
 docker compose exec idp php artisan user:disable demo@example.com
@@ -99,7 +99,7 @@ docker compose exec idp php artisan user:disable demo@example.com --enable
 - Admin API（4445）はローカル確認のため 127.0.0.1 に開けているが、本番では公開しない
 - クライアント側から始めるログアウト（RP-Initiated Logout）と Token Introspection はこのサンプルには含めていない
 - Hydra の認可コードはブローカーと rp-modern のコールバック URL に載り、アクセスログに残る。攻撃者が始めた認可要求を被害者に完了させ、ログから拾った認可コードを攻撃者が自分のセッションで使う攻撃は、PKCE では防げない（challenge が攻撃者のもの）。サンプルでは `ttl.auth_code` を 1 分にし、`Referrer-Policy: no-referrer` を付けている。本番ではリバースプロキシのログ形式でクエリを落とす
-- ブローカーからレガシーアプリへの POST は、両者が別サイト（登録可能ドメインが違う）だとクロスサイトになり、SameSite 属性の付かない PHP 5.6 のセッション Cookie は、省略時を Lax 扱いするブラウザ（Chrome 系）では送られない。成否がブラウザに依存するので、ブローカーとレガシーアプリは同一サイトに置く
+- ブローカーからレガシーアプリへの POST は、両者が別サイト（登録可能ドメインが違う）だとクロスサイトになり、SameSite 属性の付かない PHP 5.6 のセッション Cookie は、省略時を Lax 扱いするブラウザ（Chrome 系）では送られないことがあり、送られなければ `state` が空になって失敗する。成否がブラウザや Cookie の経過時間に依存するので、ブローカーとレガシーアプリは同一サイトに置く
 - ブローカーのコールバックは自動送信のフォームと「続行」ボタンを両方出す。CSP でインラインスクリプトを止めている環境ではボタンで進む。rp-legacy からブラウザの「戻る」でブローカーのコールバックに戻ると 400 になる
 - `exchange.php` はサンプルではブラウザからも到達できる。本番では内部向けを別のポートかバーチャルホストに分けるか、リバースプロキシでパス単位に遮断する
 
