@@ -86,9 +86,8 @@ services:
       OIDC_JWKS_URI: http://hydra:4444/.well-known/jwks.json
       OIDC_USERINFO_ENDPOINT: http://hydra:4444/userinfo
       OIDC_REDIRECT_URI: http://localhost:8083/callback.php
-      BROKER_EXCHANGE_SECRET: ${BROKER_EXCHANGE_SECRET}
-      # ブローカーが戻してよいレガシー側 URL の前方一致
-      ALLOWED_RETURN_PREFIX: http://localhost:8084/
+      # ブローカーを使うアプリ。id ごとにシークレットと戻り先の前方一致を持つ
+      BROKER_APPS: '[{"id":"rp-legacy","secret":"${BROKER_EXCHANGE_SECRET}","return_prefix":"http://localhost:8084/"}]'
     ports:
       - "8083:8080"
     volumes:
@@ -103,6 +102,7 @@ services:
     environment:
       BROKER_START_URL: http://localhost:8083/start.php
       BROKER_EXCHANGE_URL: http://broker:8080/exchange.php
+      BROKER_APP_ID: rp-legacy
       BROKER_EXCHANGE_SECRET: ${BROKER_EXCHANGE_SECRET}
       SELF_CALLBACK_URL: http://localhost:8084/callback.php
     ports:

@@ -3,7 +3,7 @@
 session_name('rp_legacy_session');
 session_start();
 $user = isset($_SESSION['user']) ? $_SESSION['user'] : null;
-$loginUrl = getenv('BROKER_START_URL') . '?return_to=' . rawurlencode(getenv('SELF_CALLBACK_URL'));
+$loginUrl = "login.php";
 ?>
 <!doctype html>
 <meta charset="utf-8">

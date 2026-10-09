@@ -49,4 +49,16 @@ class HydraAdmin
             ->put('/admin/oauth2/auth/requests/consent/accept', $body)
             ->json('redirect_to');
     }
+
+    /** Hydra のログインセッションを失効させる。以後の認可要求で skip されなくなる */
+    public function revokeLoginSessions(string $subject): void
+    {
+        $this->client()->withQueryParameters(['subject' => $subject])->delete('/admin/oauth2/auth/sessions/login');
+    }
+
+    /** 同意セッションと、それに紐づくアクセストークン・リフレッシュトークンを失効させる */
+    public function revokeConsentSessions(string $subject): void
+    {
+        $this->client()->withQueryParameters(['subject' => $subject, 'all' => 'true'])->delete('/admin/oauth2/auth/sessions/consent');
+    }
 }
