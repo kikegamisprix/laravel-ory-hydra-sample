@@ -1,6 +1,6 @@
 <?php
 // ブローカーを利用するアプリの一覧。BROKER_APPS（JSON）で渡す
-// [{"id":"rp-legacy","secret":"...","return_prefix":"http://localhost:8084/"}]
+// [{"id":"rp-legacy","secret":"...","return_to":"http://localhost:8084/callback.php"}]
 function apps(): array
 {
     static $apps = null;
@@ -10,12 +10,11 @@ function apps(): array
     return $apps;
 }
 
-// return_to の前方一致でアプリを特定する。該当なしなら null
+// 戻り先は完全一致。前方一致にするとレガシー側のオープンリダイレクト経由でコードが漏れる
 function appForReturnTo(string $returnTo): ?array
 {
     foreach (apps() as $app) {
-        $prefix = $app['return_prefix'] ?? '';
-        if ($prefix !== '' && str_starts_with($returnTo, $prefix)) {
+        if (($app['return_to'] ?? '') === $returnTo) {
             return $app;
         }
     }

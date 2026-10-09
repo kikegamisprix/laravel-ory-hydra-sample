@@ -1,4 +1,4 @@
-# ブラウザからは localhost:<port>、コンテナ間はサービス名で到達する
+# ブラウザからは localhost:<port>、コンテナ間はサービス名で到達する。ポートは 127.0.0.1 にだけ開ける
 # 4444: Hydra public / 8081: idp (Laravel) / 8082: rp-modern / 8083: broker / 8084: rp-legacy (PHP 5.6)
 services:
   postgres:
@@ -33,10 +33,9 @@ services:
     environment:
       DSN: postgres://hydra:${POSTGRES_PASSWORD}@postgres:5432/hydra?sslmode=disable
       SECRETS_SYSTEM: ${HYDRA_SECRETS_SYSTEM}
-      OIDC_SUBJECT_IDENTIFIERS_PAIRWISE_SALT: ${HYDRA_PAIRWISE_SALT}
     ports:
-      - "4444:4444"   # public
-      - "4445:4445"   # admin（ローカル確認用。本番では公開しない）
+      - "127.0.0.1:4444:4444"   # public
+      - "127.0.0.1:4445:4445"   # admin（ローカル確認用。本番では公開しない）
     volumes:
       - ./hydra:/etc/config/hydra:ro
     depends_on:
@@ -51,7 +50,7 @@ services:
       DEMO_USER_EMAIL: ${DEMO_USER_EMAIL}
       DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD}
     ports:
-      - "8081:8080"
+      - "127.0.0.1:8081:8080"
     volumes:
       - ./idp:/app
       - idp-vendor:/app/vendor
@@ -69,7 +68,7 @@ services:
       OIDC_USERINFO_ENDPOINT: http://hydra:4444/userinfo
       OIDC_REDIRECT_URI: http://localhost:8082/callback.php
     ports:
-      - "8082:8080"
+      - "127.0.0.1:8082:8080"
     volumes:
       - ./rp-modern:/app
       - rp-modern-vendor:/app/vendor
@@ -86,10 +85,10 @@ services:
       OIDC_JWKS_URI: http://hydra:4444/.well-known/jwks.json
       OIDC_USERINFO_ENDPOINT: http://hydra:4444/userinfo
       OIDC_REDIRECT_URI: http://localhost:8083/callback.php
-      # ブローカーを使うアプリ。id ごとにシークレットと戻り先の前方一致を持つ
-      BROKER_APPS: '[{"id":"rp-legacy","secret":"${BROKER_EXCHANGE_SECRET}","return_prefix":"http://localhost:8084/"}]'
+      # ブローカーを使うアプリ。id ごとにシークレットと戻り先（完全一致）を持つ
+      BROKER_APPS: '[{"id":"rp-legacy","secret":"${BROKER_EXCHANGE_SECRET}","return_to":"http://localhost:8084/callback.php"}]'
     ports:
-      - "8083:8080"
+      - "127.0.0.1:8083:8080"
     volumes:
       - ./broker:/app
       - broker-vendor:/app/vendor
@@ -106,7 +105,7 @@ services:
       BROKER_EXCHANGE_SECRET: ${BROKER_EXCHANGE_SECRET}
       SELF_CALLBACK_URL: http://localhost:8084/callback.php
     ports:
-      - "8084:8080"
+      - "127.0.0.1:8084:8080"
     volumes:
       - ./rp-legacy:/app
     depends_on:

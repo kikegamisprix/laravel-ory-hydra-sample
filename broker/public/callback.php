@@ -22,7 +22,7 @@ try {
     exit;
 }
 $claims = $oidc->getVerifiedClaims();
-$code = issueExchangeCode($pending['app_id'], [
+$code = issueExchangeCode($pending['app_id'], $pending['state'], [
     'sub' => $claims->sub ?? null,
     'email' => $claims->email ?? null,
     'name' => $claims->name ?? null,

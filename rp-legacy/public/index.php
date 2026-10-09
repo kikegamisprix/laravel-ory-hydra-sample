@@ -1,5 +1,5 @@
 <?php
-// PHP 5.6 想定。短縮配列や null 合体演算子は使わない
+// PHP 5.6 想定。null 合体演算子と random_bytes（どちらも 7.0 以降）は使わない
 session_name('rp_legacy_session');
 session_start();
 $user = isset($_SESSION['user']) ? $_SESSION['user'] : null;
