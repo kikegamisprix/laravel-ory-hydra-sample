@@ -1,0 +1,120 @@
+# ブラウザからは localhost:<port>、コンテナ間はサービス名で到達する
+# 4444: Hydra public / 8081: idp (Laravel) / 8082: rp-modern / 8083: broker / 8084: rp-legacy (PHP 5.6)
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: hydra
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: hydra
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hydra -d hydra"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  hydra-migrate:
+    image: oryd/hydra:v26.2.0
+    command: migrate -c /etc/config/hydra/hydra.yml sql up -e --yes
+    environment:
+      DSN: postgres://hydra:${POSTGRES_PASSWORD}@postgres:5432/hydra?sslmode=disable
+    volumes:
+      - ./hydra:/etc/config/hydra:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
+
+  hydra:
+    image: oryd/hydra:v26.2.0
+    command: serve -c /etc/config/hydra/hydra.yml all --dev
+    environment:
+      DSN: postgres://hydra:${POSTGRES_PASSWORD}@postgres:5432/hydra?sslmode=disable
+      SECRETS_SYSTEM: ${HYDRA_SECRETS_SYSTEM}
+      OIDC_SUBJECT_IDENTIFIERS_PAIRWISE_SALT: ${HYDRA_PAIRWISE_SALT}
+    ports:
+      - "4444:4444"   # public
+      - "4445:4445"   # admin（ローカル確認用。本番では公開しない）
+    volumes:
+      - ./hydra:/etc/config/hydra:ro
+    depends_on:
+      hydra-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  idp:
+    build: ./idp
+    environment:
+      HYDRA_ADMIN_URL: http://hydra:4445
+      DEMO_USER_EMAIL: ${DEMO_USER_EMAIL}
+      DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD}
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./idp:/app
+      - idp-vendor:/app/vendor
+    depends_on:
+      - hydra
+
+  rp-modern:
+    build: ./rp-modern
+    env_file: ./rp-modern/.env
+    environment:
+      OIDC_ISSUER: http://localhost:4444
+      OIDC_AUTHORIZATION_ENDPOINT: http://localhost:4444/oauth2/auth
+      OIDC_TOKEN_ENDPOINT: http://hydra:4444/oauth2/token
+      OIDC_JWKS_URI: http://hydra:4444/.well-known/jwks.json
+      OIDC_USERINFO_ENDPOINT: http://hydra:4444/userinfo
+      OIDC_REDIRECT_URI: http://localhost:8082/callback.php
+    ports:
+      - "8082:8080"
+    volumes:
+      - ./rp-modern:/app
+      - rp-modern-vendor:/app/vendor
+    depends_on:
+      - hydra
+
+  broker:
+    build: ./broker
+    env_file: ./broker/.env
+    environment:
+      OIDC_ISSUER: http://localhost:4444
+      OIDC_AUTHORIZATION_ENDPOINT: http://localhost:4444/oauth2/auth
+      OIDC_TOKEN_ENDPOINT: http://hydra:4444/oauth2/token
+      OIDC_JWKS_URI: http://hydra:4444/.well-known/jwks.json
+      OIDC_USERINFO_ENDPOINT: http://hydra:4444/userinfo
+      OIDC_REDIRECT_URI: http://localhost:8083/callback.php
+      BROKER_EXCHANGE_SECRET: ${BROKER_EXCHANGE_SECRET}
+      # ブローカーが戻してよいレガシー側 URL の前方一致
+      ALLOWED_RETURN_PREFIX: http://localhost:8084/
+    ports:
+      - "8083:8080"
+    volumes:
+      - ./broker:/app
+      - broker-vendor:/app/vendor
+      - broker-data:/app/data
+    depends_on:
+      - hydra
+
+  rp-legacy:
+    build: ./rp-legacy
+    environment:
+      BROKER_START_URL: http://localhost:8083/start.php
+      BROKER_EXCHANGE_URL: http://broker:8080/exchange.php
+      BROKER_EXCHANGE_SECRET: ${BROKER_EXCHANGE_SECRET}
+      SELF_CALLBACK_URL: http://localhost:8084/callback.php
+    ports:
+      - "8084:8080"
+    volumes:
+      - ./rp-legacy:/app
+    depends_on:
+      - broker
+
+volumes:
+  postgres-data:
+  idp-vendor:
+  rp-modern-vendor:
+  broker-vendor:
+  broker-data:

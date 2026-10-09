@@ -1,0 +1,8 @@
+{
+  "name": "sample/rp-modern",
+  "description": "OIDC 対応済みのクライアント例（PHP 8）",
+  "require": {
+    "php": "^8.3",
+    "jumbojett/openid-connect-php": "^1.0"
+  }
+}
