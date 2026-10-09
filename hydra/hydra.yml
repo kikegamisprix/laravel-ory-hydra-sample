@@ -15,6 +15,8 @@ oidc:
       - public
 
 ttl:
+  # 認可コードはブローカーや RP のアクセスログに残りうるので短くする（既定 10m）
+  auth_code: 1m
   id_token: 1h
   access_token: 1h
   refresh_token: 720h

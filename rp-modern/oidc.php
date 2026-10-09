@@ -26,6 +26,8 @@ function oidcClient(): OpenIDConnectClient
 
 function startSession(): void
 {
+    // コールバック URL には Hydra の認可コードが載る。Referer で外に出さない
+    header('Referrer-Policy: no-referrer');
     // 同じ localhost 上で複数の PHP アプリが動くので Cookie 名を分ける
     session_name('rp_modern_session');
     if (session_status() !== PHP_SESSION_ACTIVE) {

@@ -35,5 +35,5 @@ echo '<!doctype html><meta charset="utf-8"><title>redirecting</title>'
     . '<form id="f" method="post" action="' . $h($pending['return_to']) . '">'
     . '<input type="hidden" name="code" value="' . $h($code) . '">'
     . '<input type="hidden" name="state" value="' . $h($pending['state']) . '">'
-    . '<noscript><button type="submit">続行</button></noscript>'
+    . '<button type="submit">続行</button>'
     . '</form><script>document.getElementById("f").submit();</script>';
