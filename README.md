@@ -64,16 +64,18 @@ docker compose down -v   # DB と vendor のボリュームも消す
 ### rp-legacy（OIDC 非対応）
 
 1. rp-legacy の `login.php` が `state` を生成してセッションに置き、broker の `start.php?return_to=...&state=...` へ。broker は戻り先からアプリを特定（`BROKER_APPS` の `return_to` と完全一致）して `state` と一緒にセッションに保存し、上の 1〜4 と同じ流れを実行する
-2. broker の `callback.php` がトークン交換と ID トークン検証を済ませ、発行先アプリと `state` のハッシュに紐づく 60 秒・一回限りの引換コードを発行し、預かった `state` と一緒に rp-legacy の `callback.php` にリダイレクト
-3. rp-legacy は URL の `state` をセッションの値と照合してから、サーバー間通信で broker の `exchange.php` に `app_id`・アプリのシークレット・引換コード・セッション側の `state` を送る。broker は `state` のハッシュが発行時と一致する場合だけユーザー情報を返す
+2. broker の `callback.php` がトークン交換と ID トークン検証を済ませ、発行先アプリと `state` のハッシュに紐づく 60 秒・一回限りの引換コードを発行し、預かった `state` と一緒に、自動送信の POST フォームで rp-legacy の `callback.php` に渡す（URL に載せないので、アクセスログ・履歴・Referer に残らない）
+3. rp-legacy はフォームの `state` をセッションの値と照合し、合否にかかわらずサーバー間通信で broker の `exchange.php` に `app_id`・アプリのシークレット・引換コード・セッション側の `state` を送る。broker は引き換え要求を受けた時点でコードを失効させ、`state` のハッシュが発行時と一致する場合だけユーザー情報を返す
 
-レガシー側のコードは curl と json_decode だけで、OIDC のライブラリは使っていません。`state` は 2 方向の攻撃を防いでいます。rp-legacy 側の照合は、他人が始めたログインの引換コードを踏まされてその人としてログインしてしまう事故（ログイン CSRF）を防ぎ、broker 側の照合は、盗まれた引換コードを攻撃者が自分のセッションで引き換えること（PKCE が防ぐのと同じ攻撃）を防ぎます。
+レガシー側のコードは curl と json_decode だけで、OIDC のライブラリは使っていません。`state` の照合は 2 か所にあります。rp-legacy 側の照合は、他人が始めたログインの引換コードを踏まされてその人としてログインしてしまう事故（ログイン CSRF）を防ぎます。broker 側の照合は、引換コードをログインを始めたレガシー側のセッションに結びつけるもので、攻撃者は自分のセッションに被害者の `state` を入れられないため、コードだけ盗んでも引き換えられません。`state` 自体は URL に出るので秘密ではありません。攻撃者が始めたフローを被害者に完了させる攻撃に対しては、不一致の引き換え要求でもコードを失効させることと、コードを URL に載せないことで備えています。
 
 ## 無効化とログアウト
 
 - ポータルからログアウトすると、Hydra のログインセッションも失効させる（`SessionController::logout`）。これを呼ばないと `remember_for` の間は他のアプリから再ログインなしで通る
 - Hydra のログインセッションが残っている場合（`skip` が true）でも、台帳で無効化されたユーザーは reject する（`LoginController::show`）
-- RP が `prompt=login` か `max_age` で再認証を求めた場合は、Laravel のセッションがあってもパスワード入力を求める（rp-modern の「再認証」リンクで確認できる）
+- SSO のセッションは Laravel 側のもの。Hydra のログインセッション（`remember`）は実際にパスワードを入力したときだけ作る。Laravel セッションの再利用で Hydra に「今認証した」セッションを作ると、`max_age` の再認証要求が Hydra の skip 経由ですり抜けるため
+- RP が `prompt=login` か `max_age` で再認証を求めた場合は、Laravel のセッションや Hydra の skip があってもパスワード入力を求める（rp-modern の「再認証」リンクで確認できる）。skip の要求をフォームで受理するときは、Hydra が示す subject と同じユーザーでしか受理しない
+- この経路で受理した場合、Hydra から見た認証時刻は受理した時刻になる（accept login に認証時刻を渡す項目はない）
 - ユーザーの無効化は `php artisan user:disable <email>`。台帳の `disabled_at` を立て、Hydra のログインセッションと発行済みトークンを失効させる。`--enable` で解除
 
 ```sh
@@ -86,9 +88,11 @@ docker compose exec idp php artisan user:disable demo@example.com --enable
 - `sub` には不変の内部 ID（ここでは users.id）を使う。メールやログイン ID は変わりうる
 - ログイン POST は `throttle:5,1`（1 分に 5 回）で制限している
 - SSO の実効寿命は Hydra のログインセッション（`remember_for`）と Laravel のセッション寿命の長い方で決まる。どちらで制御するかを決めておく
-- 引換コードの使用済み化は条件付き UPDATE 1 回で行う。SELECT してから UPDATE する書き方は保存先を変えたときに二重引き換えが起きる
+- 引換コードの使用済み化は条件付き UPDATE 1 回で行う。SELECT してから UPDATE すると文の間に別のリクエストが割り込める（SQLite でも同じ）。Redis に移すなら GETDEL か Lua で判定と削除を 1 操作にする
 - Hydra の issuer はブラウザ向け URL（`http://localhost:4444`）。コンテナからのトークン交換は `http://hydra:4444` に向ける必要があるため、クライアントは Discovery を使わずエンドポイントを個別に設定している（`rp-modern/oidc.php`）
 - 同じ `localhost` 上で複数の PHP アプリが動くため、セッション Cookie 名をアプリごとに分けている
+- PHP のセッションは `session.use_strict_mode=1` で起動し、rp-legacy はログイン開始時と完了時にセッション ID を再生成する（セッション固定対策）
+- broker のセッションは進行中のフローを 1 件しか持たない。タブを 2 つ開いて同時にログインを始めると先のフローが壊れる
 - Hydra は `--dev` で起動しており HTTPS を要求しない。本番では TLS 終端を前に置く
 - Admin API（4445）はローカル確認のため 127.0.0.1 に開けているが、本番では公開しない
 - クライアント側から始めるログアウト（RP-Initiated Logout）と Token Introspection はこのサンプルには含めていない

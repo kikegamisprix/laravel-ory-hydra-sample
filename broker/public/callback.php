@@ -1,6 +1,7 @@
 <?php
 // Hydra からの戻り。トークン交換と ID トークン検証はここで完結させ、
-// レガシー側には短寿命・一回限りの引換コードと、預かった state だけを返す
+// レガシー側には短寿命・一回限りの引換コードと、預かった state だけを返す。
+// コードは URL に載せず、自動送信の POST フォームで渡す（アクセスログ・履歴・Referer に残さない）
 require __DIR__ . '/../oidc.php';
 require __DIR__ . '/../store.php';
 startSession();
@@ -28,8 +29,11 @@ $code = issueExchangeCode($pending['app_id'], $pending['state'], [
     'name' => $claims->name ?? null,
 ]);
 
-$sep = str_contains($pending['return_to'], '?') ? '&' : '?';
-header('Location: ' . $pending['return_to'] . $sep . http_build_query([
-    'code' => $code,
-    'state' => $pending['state'],
-]));
+header('Cache-Control: no-store');
+$h = fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
+echo '<!doctype html><meta charset="utf-8"><title>redirecting</title>'
+    . '<form id="f" method="post" action="' . $h($pending['return_to']) . '">'
+    . '<input type="hidden" name="code" value="' . $h($code) . '">'
+    . '<input type="hidden" name="state" value="' . $h($pending['state']) . '">'
+    . '<noscript><button type="submit">続行</button></noscript>'
+    . '</form><script>document.getElementById("f").submit();</script>';
