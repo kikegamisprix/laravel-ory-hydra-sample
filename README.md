@@ -72,9 +72,10 @@ docker compose down -v   # DB と vendor のボリュームも消す
 ## 無効化とログアウト
 
 - ポータルからログアウトすると、Hydra のログインセッションも失効させる（`SessionController::logout`）。これを呼ばないと `remember_for` の間は他のアプリから再ログインなしで通る
-- Hydra のログインセッションが残っている場合（`skip` が true）でも、台帳で無効化されたユーザーは reject する（`LoginController::show`）
+- Hydra のログインセッションが残っている場合（`skip` が true）でも、台帳で無効化されたユーザーは reject する。Laravel 側が別のユーザーでログインしていれば、残っていた Hydra セッションを失効させて reject する（`LoginController::show`）
+- 再利用経路は Laravel セッションの `auth_time`（パスワード認証時に `submit` が入れる）を前提にする。既存のログイン処理に組み込むときは、そちらにも `auth_time` を入れる 1 行が要る。無ければ再利用経路は通らない
 - SSO のセッションは Laravel 側のもの。Hydra のログインセッション（`remember`）は実際にパスワードを入力したときだけ作る。Laravel セッションの再利用で Hydra に「今認証した」セッションを作ると、`max_age` の再認証要求が Hydra の skip 経由ですり抜けるため
-- `prompt=login`、`max_age` 超過、subject 不一致は Hydra 自身が処理する（skip を立てない、または `prompt=login` を付けて戻す）。Laravel 側で見るのは Laravel セッションを再利用する経路だけで、`prompt=login` / `max_age`（`request_url` のクエリ。Request Object や PAR は見ていない）と、最後のパスワード入力からの絶対上限（`config/hydra.php` の `max_sso_age`、8 時間）を確認する。rp-modern の「再認証」リンクで確認できる
+- `prompt=login` と `max_age` 超過は Hydra 自身が処理する（セッションを使わず skip を立てない）。accept した subject が Hydra セッションの subject と違う場合も Hydra が `prompt=login` を付けて戻す。Laravel 側で見るのは Laravel セッションを再利用する経路で、`prompt=login` / `max_age`（`request_url` のクエリ。Request Object や PAR は見ていない）と、最後のパスワード入力からの絶対上限（`config/hydra.php` の `max_sso_age`、8 時間）を確認する。rp-modern の「再認証」リンクで確認できる
 - 再利用経路で受理した場合、Hydra から見た認証時刻は受理した時刻になる（accept login に認証時刻を渡す項目はない）。RP が「最近認証したか」を判断するときは `auth_time` を自分で見ず、`max_age` か `prompt=login` を使う
 - 再利用経路は remember を付けないため、`prompt=none`（サイレント認証）は Hydra のログインセッション（`remember_for`）が切れると失敗する。`prompt=none` を使う RP があるなら Hydra のセッション寿命が SSO の上限になる
 - ユーザーの無効化は `php artisan user:disable <email>`。台帳の `disabled_at` を立て、Hydra のログインセッションと発行済みトークンを失効させる。`--enable` で解除

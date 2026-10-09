@@ -18,8 +18,9 @@ use Illuminate\View\View;
  * 実際にパスワードを入力したときだけ作る。Laravel セッションの再利用で Hydra に
  * 「今認証した」セッションを作ると、max_age の再認証要求がすり抜けるため。
  *
- * prompt=login、max_age 超過、subject 不一致は Hydra 自身が処理する（skip を立てない、
- * または prompt=login を付けて戻す）。ここで見るのは Laravel セッションを再利用する経路だけ
+ * prompt=login と max_age 超過は Hydra 自身が処理する（セッションを使わず skip を立てない）。
+ * accept した subject が Hydra セッションの subject と違う場合も、Hydra が prompt=login を付けて戻す。
+ * ここで見るのは Laravel セッションを再利用する経路と、skip 経路での台帳・ユーザー一致の確認
  */
 class LoginController extends Controller
 {
@@ -37,14 +38,23 @@ class LoginController extends Controller
         // Hydra 側にログインセッションが残っている場合。画面は出さないが、
         // 台帳で無効化されたユーザーをそのまま通さないよう、有効性だけは確認する
         if ($loginRequest['skip'] ?? false) {
-            $user = User::find($loginRequest['subject']);
+            $subject = (string) $loginRequest['subject'];
+            $user = User::find($subject);
             if ($user === null || ! $user->isActive()) {
                 return redirect()->away($this->hydra->rejectLoginRequest(
                     $challenge, 'access_denied', 'このアカウントは無効です'
                 ));
             }
+            // Laravel 側は別のユーザーでログインしている（Hydra を通らないログイン画面で
+            // 入れ直した等）。残っていた Hydra セッションで前のユーザーとして通さない
+            if (Auth::check() && (string) Auth::id() !== $subject) {
+                $this->hydra->revokeLoginSessions($subject);
+                return redirect()->away($this->hydra->rejectLoginRequest(
+                    $challenge, 'login_required', 'ログインし直してください'
+                ));
+            }
             return redirect()->away($this->hydra->acceptLoginRequest($challenge, [
-                'subject' => $loginRequest['subject'],
+                'subject' => $subject,
             ]));
         }
 
