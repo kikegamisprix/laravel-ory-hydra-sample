@@ -63,20 +63,33 @@ docker compose down -v   # DB と vendor のボリュームも消す
 
 ### rp-legacy（OIDC 非対応）
 
-1. `index.php` のリンクで broker の `start.php?return_to=...` へ。broker は戻り先を前方一致で検証してセッションに保存し、上の 1〜4 と同じ流れを実行する
-2. broker の `callback.php` がトークン交換と ID トークン検証を済ませ、60 秒・一回限りの引換コードを発行して rp-legacy の `callback.php` にリダイレクト
-3. rp-legacy はサーバー間通信で broker の `exchange.php` に引換コードと共有シークレットを送り、ユーザー情報を受け取ってセッションを作る
+1. rp-legacy の `login.php` が `state` を生成してセッションに置き、broker の `start.php?return_to=...&state=...` へ。broker は戻り先からアプリを特定（`BROKER_APPS` の前方一致）して `state` と一緒にセッションに保存し、上の 1〜4 と同じ流れを実行する
+2. broker の `callback.php` がトークン交換と ID トークン検証を済ませ、発行先アプリに紐づく 60 秒・一回限りの引換コードを発行し、預かった `state` と一緒に rp-legacy の `callback.php` にリダイレクト
+3. rp-legacy は `state` をセッションの値と照合してから、サーバー間通信で broker の `exchange.php` に `app_id`・アプリのシークレット・引換コードを送り、ユーザー情報を受け取ってセッションを作る
 
-レガシー側のコードは curl と json_decode だけで、OIDC のライブラリは使っていません。
+レガシー側のコードは curl と json_decode だけで、OIDC のライブラリは使っていません。`state` を省くと、他人が始めたログインの引換コードを踏まされてその人としてログインしてしまう（ログイン CSRF）ので省けません。
+
+## 無効化とログアウト
+
+- ポータルからログアウトすると、Hydra のログインセッションも失効させる（`SessionController::logout`）。これを呼ばないと `remember_for` の間は他のアプリから再ログインなしで通る
+- Hydra のログインセッションが残っている場合（`skip` が true）でも、台帳で無効化されたユーザーは reject する（`LoginController::show`）
+- ユーザーの無効化は `php artisan user:disable <email>`。台帳の `disabled_at` を立て、Hydra のログインセッションと発行済みトークンを失効させる。`--enable` で解除
+
+```sh
+docker compose exec idp php artisan user:disable demo@example.com
+docker compose exec idp php artisan user:disable demo@example.com --enable
+```
 
 ## 設計上の注意
 
 - `sub` には不変の内部 ID（ここでは users.id）を使う。メールやログイン ID は変わりうる
+- ログイン POST は `throttle:5,1`（1 分に 5 回）で制限している
 - Hydra の issuer はブラウザ向け URL（`http://localhost:4444`）。コンテナからのトークン交換は `http://hydra:4444` に向ける必要があるため、クライアントは Discovery を使わずエンドポイントを個別に設定している（`rp-modern/oidc.php`）
 - 同じ `localhost` 上で複数の PHP アプリが動くため、セッション Cookie 名をアプリごとに分けている
 - Hydra は `--dev` で起動しており HTTPS を要求しない。本番では TLS 終端を前に置く
 - Admin API（4445）はローカル確認のため公開しているが、本番では公開しない
-- ログアウト（RP-Initiated Logout）と Token Introspection はこのサンプルには含めていない
+- クライアント側から始めるログアウト（RP-Initiated Logout）と Token Introspection はこのサンプルには含めていない
+- `exchange.php` はサンプルではブラウザからも到達できる。本番ではサーバー間のネットワークに閉じる
 
 ## バージョン
 

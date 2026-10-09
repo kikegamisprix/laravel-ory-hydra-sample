@@ -22,7 +22,13 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'disabled_at',
     ];
+
+    public function isActive(): bool
+    {
+        return $this->disabled_at === null;
+    }
 
     /**
      * The attributes that should be hidden for serialization.
@@ -43,6 +49,7 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'disabled_at' => 'datetime',
             'password' => 'hashed',
         ];
     }

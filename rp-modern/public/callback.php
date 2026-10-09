@@ -10,6 +10,7 @@ try {
     echo 'ログインに失敗しました: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES);
     exit;
 }
+session_regenerate_id(true);
 $claims = $oidc->getVerifiedClaims();
 $_SESSION['user'] = [
     'sub' => $claims->sub ?? null,

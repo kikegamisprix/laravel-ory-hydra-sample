@@ -1,14 +1,15 @@
 <?php
 // Hydra からの戻り。トークン交換と ID トークン検証はここで完結させ、
-// レガシー側には短寿命・一回限りの引換コードだけを渡す
+// レガシー側には短寿命・一回限りの引換コードと、預かった state だけを返す
 require __DIR__ . '/../oidc.php';
 require __DIR__ . '/../store.php';
 startSession();
 
-$returnTo = $_SESSION['return_to'] ?? '';
-if ($returnTo === '') {
+$pending = $_SESSION['pending'] ?? null;
+unset($_SESSION['pending']);
+if (!is_array($pending)) {
     http_response_code(400);
-    echo 'セッションに戻り先がありません';
+    echo 'セッションに開始情報がありません';
     exit;
 }
 
@@ -21,12 +22,14 @@ try {
     exit;
 }
 $claims = $oidc->getVerifiedClaims();
-$code = issueExchangeCode([
+$code = issueExchangeCode($pending['app_id'], [
     'sub' => $claims->sub ?? null,
     'email' => $claims->email ?? null,
     'name' => $claims->name ?? null,
 ]);
-unset($_SESSION['return_to']);
 
-$sep = str_contains($returnTo, '?') ? '&' : '?';
-header('Location: ' . $returnTo . $sep . 'code=' . rawurlencode($code));
+$sep = str_contains($pending['return_to'], '?') ? '&' : '?';
+header('Location: ' . $pending['return_to'] . $sep . http_build_query([
+    'code' => $code,
+    'state' => $pending['state'],
+]));

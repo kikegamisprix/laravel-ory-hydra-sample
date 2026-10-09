@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Hydra;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use App\Services\HydraAdmin;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -26,15 +27,22 @@ class LoginController extends Controller
 
         $loginRequest = $this->hydra->getLoginRequest($challenge);
 
-        // Hydra 側にログインセッションが残っている場合は画面を出さずに受理する
+        // Hydra 側にログインセッションが残っている場合。画面は出さないが、
+        // 台帳で無効化されたユーザーをそのまま通さないよう、有効性だけは確認する
         if ($loginRequest['skip'] ?? false) {
+            $user = User::find($loginRequest['subject']);
+            if ($user === null || ! $user->isActive()) {
+                return redirect()->away($this->hydra->rejectLoginRequest(
+                    $challenge, 'access_denied', 'このアカウントは無効です'
+                ));
+            }
             return redirect()->away($this->hydra->acceptLoginRequest($challenge, [
                 'subject' => $loginRequest['subject'],
             ]));
         }
 
         // ポータル自身のセッションでログイン済みなら、それをそのまま使う（SSO の要）
-        if (Auth::check()) {
+        if (Auth::check() && Auth::user()->isActive()) {
             return redirect()->away($this->accept($challenge, Auth::id()));
         }
 
@@ -53,12 +61,20 @@ class LoginController extends Controller
         ]);
 
         if (! Auth::attempt(['email' => $data['email'], 'password' => $data['password']])) {
-            return back()->withInput($request->only('email', 'login_challenge'))
-                ->withErrors(['email' => 'メールアドレスかパスワードが違います']);
+            return $this->failed($request, 'メールアドレスかパスワードが違います');
+        }
+        if (! Auth::user()->isActive()) {
+            Auth::logout();
+            return $this->failed($request, 'このアカウントは無効です');
         }
         $request->session()->regenerate();
 
         return redirect()->away($this->accept($data['login_challenge'], Auth::id()));
+    }
+
+    private function failed(Request $request, string $message): RedirectResponse
+    {
+        return back()->withInput($request->only('email', 'login_challenge'))->withErrors(['email' => $message]);
     }
 
     private function accept(string $challenge, int|string $userId): string
