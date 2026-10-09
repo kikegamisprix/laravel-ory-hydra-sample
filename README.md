@@ -74,8 +74,9 @@ docker compose down -v   # DB と vendor のボリュームも消す
 - ポータルからログアウトすると、Hydra のログインセッションも失効させる（`SessionController::logout`）。これを呼ばないと `remember_for` の間は他のアプリから再ログインなしで通る
 - Hydra のログインセッションが残っている場合（`skip` が true）でも、台帳で無効化されたユーザーは reject する（`LoginController::show`）
 - SSO のセッションは Laravel 側のもの。Hydra のログインセッション（`remember`）は実際にパスワードを入力したときだけ作る。Laravel セッションの再利用で Hydra に「今認証した」セッションを作ると、`max_age` の再認証要求が Hydra の skip 経由ですり抜けるため
-- RP が `prompt=login` か `max_age` で再認証を求めた場合は、Laravel のセッションや Hydra の skip があってもパスワード入力を求める（rp-modern の「再認証」リンクで確認できる）。skip の要求をフォームで受理するときは、Hydra が示す subject と同じユーザーでしか受理しない
-- この経路で受理した場合、Hydra から見た認証時刻は受理した時刻になる（accept login に認証時刻を渡す項目はない）
+- `prompt=login`、`max_age` 超過、subject 不一致は Hydra 自身が処理する（skip を立てない、または `prompt=login` を付けて戻す）。Laravel 側で見るのは Laravel セッションを再利用する経路だけで、`prompt=login` / `max_age`（`request_url` のクエリ。Request Object や PAR は見ていない）と、最後のパスワード入力からの絶対上限（`config/hydra.php` の `max_sso_age`、8 時間）を確認する。rp-modern の「再認証」リンクで確認できる
+- 再利用経路で受理した場合、Hydra から見た認証時刻は受理した時刻になる（accept login に認証時刻を渡す項目はない）。RP が「最近認証したか」を判断するときは `auth_time` を自分で見ず、`max_age` か `prompt=login` を使う
+- 再利用経路は remember を付けないため、`prompt=none`（サイレント認証）は Hydra のログインセッション（`remember_for`）が切れると失敗する。`prompt=none` を使う RP があるなら Hydra のセッション寿命が SSO の上限になる
 - ユーザーの無効化は `php artisan user:disable <email>`。台帳の `disabled_at` を立て、Hydra のログインセッションと発行済みトークンを失効させる。`--enable` で解除
 
 ```sh
@@ -87,7 +88,7 @@ docker compose exec idp php artisan user:disable demo@example.com --enable
 
 - `sub` には不変の内部 ID（ここでは users.id）を使う。メールやログイン ID は変わりうる
 - ログイン POST は `throttle:5,1`（1 分に 5 回）で制限している
-- SSO の実効寿命は Hydra のログインセッション（`remember_for`）と Laravel のセッション寿命の長い方で決まる。どちらで制御するかを決めておく
+- SSO の実効寿命は Hydra のログインセッション（`remember_for`）と Laravel 側の上限で決まる。Laravel のセッションは無操作タイムアウトで延び続けるので、`max_sso_age` で絶対上限を別に持つ
 - 引換コードの使用済み化は条件付き UPDATE 1 回で行う。SELECT してから UPDATE すると文の間に別のリクエストが割り込める（SQLite でも同じ）。Redis に移すなら GETDEL か Lua で判定と削除を 1 操作にする
 - Hydra の issuer はブラウザ向け URL（`http://localhost:4444`）。コンテナからのトークン交換は `http://hydra:4444` に向ける必要があるため、クライアントは Discovery を使わずエンドポイントを個別に設定している（`rp-modern/oidc.php`）
 - 同じ `localhost` 上で複数の PHP アプリが動くため、セッション Cookie 名をアプリごとに分けている
@@ -96,6 +97,9 @@ docker compose exec idp php artisan user:disable demo@example.com --enable
 - Hydra は `--dev` で起動しており HTTPS を要求しない。本番では TLS 終端を前に置く
 - Admin API（4445）はローカル確認のため 127.0.0.1 に開けているが、本番では公開しない
 - クライアント側から始めるログアウト（RP-Initiated Logout）と Token Introspection はこのサンプルには含めていない
+- Hydra の認可コードはブローカーと rp-modern のコールバック URL に載り、アクセスログに残る。攻撃者が始めた認可要求を被害者に完了させ、ログから拾った認可コードを攻撃者が自分のセッションで使う攻撃は、PKCE では防げない（challenge が攻撃者のもの）。サンプルでは `ttl.auth_code` を 1 分にし、`Referrer-Policy: no-referrer` を付けている。本番ではリバースプロキシのログ形式でクエリを落とす
+- ブローカーからレガシーアプリへの POST は、両者が別サイト（登録可能ドメインが違う）だとクロスサイトになり、SameSite 属性の付かない PHP 5.6 のセッション Cookie はブラウザが送らない。ブローカーとレガシーアプリは同一サイトに置く
+- ブローカーのコールバックは自動送信のフォームと「続行」ボタンを両方出す。CSP でインラインスクリプトを止めている環境ではボタンで進む。rp-legacy からブラウザの「戻る」でブローカーのコールバックに戻ると 400 になる
 - `exchange.php` はサンプルではブラウザからも到達できる。本番では内部向けを別のポートかバーチャルホストに分けるか、リバースプロキシでパス単位に遮断する
 
 ## バージョン
