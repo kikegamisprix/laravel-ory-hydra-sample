@@ -56,7 +56,7 @@ class HydraAdmin
         $this->client()->withQueryParameters(['subject' => $subject])->delete('/admin/oauth2/auth/sessions/login');
     }
 
-    /** 同意セッションと、それに紐づくアクセストークン・リフレッシュトークンを失効させる */
+    /** 同意セッションを失効させる。API 仕様では紐づくアクセストークンも無効化される（リフレッシュトークンは明記なし） */
     public function revokeConsentSessions(string $subject): void
     {
         $this->client()->withQueryParameters(['subject' => $subject, 'all' => 'true'])->delete('/admin/oauth2/auth/sessions/consent');
